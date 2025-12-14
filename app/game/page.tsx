@@ -159,8 +159,15 @@ export default function GamePage() {
             console.log(`✅ ${shortId} 위치 업데이트 성공`);
             otherPlayers[playerData.id].setPosition(playerData.x, playerData.y);
           } else {
-            console.error(`⚠️ ${shortId}가 otherPlayers에 없음!`);
-            console.log('otherPlayers 키들:', Object.keys(otherPlayers));
+            console.warn(`⚠️ ${shortId}가 otherPlayers에 없음! 임시 생성 시도...`);
+            // 플레이어가 없으면 임시로 생성 (타이밍 이슈 대응)
+            if (scene && scene.physics) {
+              const tempPlayer = scene.physics.add.sprite(playerData.x, playerData.y, 'otherPlayer');
+              otherPlayers[playerData.id] = tempPlayer;
+              console.log(`✅ ${shortId} 임시 생성 완료`);
+            } else {
+              console.error(`❌ Scene이 준비되지 않음`);
+            }
           }
         });
 
@@ -215,12 +222,16 @@ export default function GamePage() {
             return;
           }
           
-          const otherPlayer = scene.physics.add.sprite(playerInfo.x, playerInfo.y, 'otherPlayer');
-          otherPlayers[playerInfo.id] = otherPlayer;
-          
-          console.log('👥 otherPlayers에 추가:', playerInfo.id.substring(0, 8));
-          console.log('현재 otherPlayers 갯수:', Object.keys(otherPlayers).length);
-          console.log('otherPlayers 목록:', Object.keys(otherPlayers).map(id => id.substring(0, 8)));
+          try {
+            const otherPlayer = scene.physics.add.sprite(playerInfo.x, playerInfo.y, 'otherPlayer');
+            otherPlayers[playerInfo.id] = otherPlayer;
+            
+            console.log('👥 otherPlayers에 추가:', playerInfo.id.substring(0, 8));
+            console.log('현재 otherPlayers 갯수:', Object.keys(otherPlayers).length);
+            console.log('otherPlayers 목록:', Object.keys(otherPlayers).map(id => id.substring(0, 8)));
+          } catch (error) {
+            console.error('❌ 플레이어 생성 실패:', error);
+          }
         }
       }
 
