@@ -15,10 +15,9 @@ export default function GamePage() {
       import('socket.io-client')
     ]).then(([Phaser, { io }]) => {
       
-      // Socket.io 연결
-      const SOCKET_URL = typeof window !== 'undefined' 
-        ? `http://${window.location.hostname}:9001`
-        : 'http://localhost:9001';
+      // Socket.io 연결 - EC2 퍼블릭 IP 또는 도메인으로 변경하세요
+      // TODO: 여기에 EC2 퍼블릭 IP 주소를 입력하세요
+      const SOCKET_URL = 'http://3.35.218.64:9001';  // EC2 IP로 변경 필요!
       
       console.log('🔌 소켓 서버 연결 시도:', SOCKET_URL);
       const socket = io(SOCKET_URL, {
