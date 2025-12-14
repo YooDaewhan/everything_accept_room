@@ -64,9 +64,19 @@ export default function GamePage() {
       let camera: Phaser.Cameras.Scene2D.Camera;
       let scene: Phaser.Scene;
       let mySocketId: string = '';
+      
+      // 가상 조이스틱 변수
+      let joystick: any = null;
+      let joystickBase: Phaser.GameObjects.Arc | null = null;
+      let joystickThumb: Phaser.GameObjects.Arc | null = null;
+      let joystickForce = { x: 0, y: 0 };
+      let isMobile = false;
 
       function preload(this: Phaser.Scene) {
         scene = this;
+        
+        // 모바일 체크
+        isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
         
         // 플레이어 캐릭터 생성 (초록색 - 내 캐릭터)
         const graphics = this.add.graphics();
@@ -94,6 +104,7 @@ export default function GamePage() {
 
       function create(this: Phaser.Scene) {
         console.log('🎮 Phaser 게임 생성 시작');
+        console.log('📱 모바일 여부:', isMobile);
         
         // 큰 맵 생성 (타일 패턴)
         for (let x = 0; x < 50; x++) {
@@ -113,6 +124,11 @@ export default function GamePage() {
           left: Phaser.Input.Keyboard.KeyCodes.A,
           right: Phaser.Input.Keyboard.KeyCodes.D
         });
+
+        // 모바일용 가상 조이스틱 생성
+        if (isMobile) {
+          createJoystick(this);
+        }
 
         // Socket.io 이벤트 리스너
         socket.on('connect', () => {
@@ -210,6 +226,59 @@ export default function GamePage() {
         });
       }
 
+      function createJoystick(scene: Phaser.Scene) {
+        const baseRadius = 60;
+        const thumbRadius = 30;
+        const baseX = 100;
+        const baseY = 500;
+
+        // 조이스틱 베이스 (반투명 회색)
+        joystickBase = scene.add.circle(baseX, baseY, baseRadius, 0x888888, 0.3);
+        joystickBase.setScrollFactor(0); // 카메라에 고정
+        joystickBase.setDepth(1000);
+
+        // 조이스틱 썸 (반투명 흰색)
+        joystickThumb = scene.add.circle(baseX, baseY, thumbRadius, 0xffffff, 0.5);
+        joystickThumb.setScrollFactor(0); // 카메라에 고정
+        joystickThumb.setDepth(1001);
+
+        // 터치 이벤트
+        scene.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+          const distance = Phaser.Math.Distance.Between(pointer.x, pointer.y, baseX, baseY);
+          if (distance < baseRadius) {
+            joystick = { active: true };
+          }
+        });
+
+        scene.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
+          if (joystick && joystick.active) {
+            const angle = Phaser.Math.Angle.Between(baseX, baseY, pointer.x, pointer.y);
+            const distance = Phaser.Math.Distance.Between(baseX, baseY, pointer.x, pointer.y);
+            const clampedDistance = Math.min(distance, baseRadius - thumbRadius);
+            
+            const thumbX = baseX + Math.cos(angle) * clampedDistance;
+            const thumbY = baseY + Math.sin(angle) * clampedDistance;
+            
+            joystickThumb!.setPosition(thumbX, thumbY);
+            
+            // 조이스틱 힘 계산 (-1 ~ 1)
+            joystickForce.x = (thumbX - baseX) / (baseRadius - thumbRadius);
+            joystickForce.y = (thumbY - baseY) / (baseRadius - thumbRadius);
+          }
+        });
+
+        scene.input.on('pointerup', () => {
+          if (joystick) {
+            joystick.active = false;
+            joystickThumb!.setPosition(baseX, baseY);
+            joystickForce.x = 0;
+            joystickForce.y = 0;
+          }
+        });
+
+        console.log('🕹️ 가상 조이스틱 생성 완료');
+      }
+
       function addPlayer(scene: Phaser.Scene, playerInfo: any, isSelf: boolean) {
         console.log(`🎭 addPlayer 호출: ${playerInfo.id.substring(0, 8)}, isSelf: ${isSelf}`);
         
@@ -262,29 +331,41 @@ export default function GamePage() {
         
         player.setVelocity(0);
 
-        // WASD 또는 방향키로 이동
+        // 키보드 또는 조이스틱으로 이동
+        let moveX = 0;
+        let moveY = 0;
+
+        // 키보드 입력 (PC)
         if (cursors.left.isDown || wasd.left.isDown) {
-          player.setVelocityX(-speed);
-          moved = true;
+          moveX = -1;
         } else if (cursors.right.isDown || wasd.right.isDown) {
-          player.setVelocityX(speed);
-          moved = true;
+          moveX = 1;
         }
 
         if (cursors.up.isDown || wasd.up.isDown) {
-          player.setVelocityY(-speed);
-          moved = true;
+          moveY = -1;
         } else if (cursors.down.isDown || wasd.down.isDown) {
-          player.setVelocityY(speed);
-          moved = true;
+          moveY = 1;
         }
 
-        // 대각선 이동 시 속도 정규화
-        if (player.body.velocity.x !== 0 && player.body.velocity.y !== 0) {
-          player.setVelocity(
-            player.body.velocity.x * 0.707,
-            player.body.velocity.y * 0.707
-          );
+        // 조이스틱 입력 (모바일) - 키보드 입력이 없을 때만
+        if (isMobile && (moveX === 0 && moveY === 0)) {
+          moveX = joystickForce.x;
+          moveY = joystickForce.y;
+        }
+
+        // 실제 이동 적용
+        if (Math.abs(moveX) > 0.1 || Math.abs(moveY) > 0.1) {
+          player.setVelocity(moveX * speed, moveY * speed);
+          moved = true;
+          
+          // 대각선 이동 시 속도 정규화
+          if (Math.abs(moveX) > 0.1 && Math.abs(moveY) > 0.1) {
+            player.setVelocity(
+              moveX * speed * 0.707,
+              moveY * speed * 0.707
+            );
+          }
         }
 
         // 움직임이 있을 때 서버로 전송 (throttle 적용)
@@ -320,13 +401,13 @@ export default function GamePage() {
         <div className="mb-4 text-white text-center">
           <h2 className="text-2xl font-bold mb-2">멀티플레이어 게임</h2>
           <p className="text-sm text-gray-400">
-            WASD 또는 방향키로 이동 | 🟢 나 | 🔵 다른 플레이어
+            💻 PC: WASD 또는 방향키 | 📱 모바일: 조이스틱
+          </p>
+          <p className="text-sm text-gray-400">
+            🟢 나 | 🔵 다른 플레이어
           </p>
           <p className="text-xs text-gray-500 mt-2">
             F12 눌러서 콘솔 확인 - 상세 디버깅 로그 확인 가능
-          </p>
-          <p className="text-xs text-yellow-400 mt-1 font-semibold">
-            ⚠️ 게임 화면을 클릭한 후 키보드로 이동하세요!
           </p>
         </div>
         <div ref={gameRef} className="rounded overflow-hidden" />
