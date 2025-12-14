@@ -16,7 +16,6 @@ export default function GamePage() {
     ]).then(([Phaser, { io }]) => {
       
       // Socket.io 연결 - EC2 퍼블릭 IP 또는 도메인으로 변경하세요
-      // TODO: 여기에 EC2 퍼블릭 IP 주소를 입력하세요
       const SOCKET_URL = 'http://3.36.66.226:9001';  // EC2 IP
       
       console.log('🔌 소켓 서버 연결 시도:', SOCKET_URL);
@@ -26,6 +25,20 @@ export default function GamePage() {
         reconnectionDelay: 1000,
         reconnectionAttempts: 5
       });
+
+      // 모든 소켓 이벤트 모니터링
+      const originalOn = socket.on.bind(socket);
+      const originalEmit = socket.emit.bind(socket);
+      
+      socket.on = function(event: string, handler: any) {
+        console.log(`🎧 이벤트 리스너 등록: ${event}`);
+        return originalOn(event, handler);
+      };
+      
+      socket.emit = function(event: string, ...args: any[]) {
+        console.log(`📡 이벤트 전송: ${event}`, args);
+        return originalEmit(event, ...args);
+      };
 
       // Phaser Game Config
       const config: Phaser.Types.Core.GameConfig = {
@@ -152,23 +165,29 @@ export default function GamePage() {
         // 플레이어 이동
         socket.on('playerMoved', (playerData: any) => {
           const shortId = playerData.id.substring(0, 8);
-          console.log(`👉 playerMoved 수신: ${shortId} -> (${playerData.x}, ${playerData.y})`);
-          console.log('현재 otherPlayers:', Object.keys(otherPlayers).map(id => id.substring(0, 8)));
+          console.log('='.repeat(50));
+          console.log(`👉 playerMoved 이벤트 수신!!!`);
+          console.log(`   플레이어 ID: ${shortId} (전체: ${playerData.id})`);
+          console.log(`   새 위치: (${playerData.x}, ${playerData.y})`);
+          console.log(`   현재 otherPlayers 키:`, Object.keys(otherPlayers));
+          console.log(`   playerData.id가 otherPlayers에 있나?`, playerData.id in otherPlayers);
           
           if (otherPlayers[playerData.id]) {
-            console.log(`✅ ${shortId} 위치 업데이트 성공`);
+            const beforeX = otherPlayers[playerData.id].x;
+            const beforeY = otherPlayers[playerData.id].y;
             otherPlayers[playerData.id].setPosition(playerData.x, playerData.y);
+            console.log(`   ✅ 위치 업데이트: (${beforeX}, ${beforeY}) -> (${playerData.x}, ${playerData.y})`);
           } else {
-            console.warn(`⚠️ ${shortId}가 otherPlayers에 없음! 임시 생성 시도...`);
-            // 플레이어가 없으면 임시로 생성 (타이밍 이슈 대응)
+            console.warn(`   ⚠️ ${shortId}가 otherPlayers에 없음! 임시 생성 시도...`);
             if (scene && scene.physics) {
               const tempPlayer = scene.physics.add.sprite(playerData.x, playerData.y, 'otherPlayer');
               otherPlayers[playerData.id] = tempPlayer;
-              console.log(`✅ ${shortId} 임시 생성 완료`);
+              console.log(`   ✅ ${shortId} 임시 생성 완료`);
             } else {
-              console.error(`❌ Scene이 준비되지 않음`);
+              console.error(`   ❌ Scene이 준비되지 않음`);
             }
           }
+          console.log('='.repeat(50));
         });
 
         // 플레이어 퇴장
@@ -227,8 +246,9 @@ export default function GamePage() {
             otherPlayers[playerInfo.id] = otherPlayer;
             
             console.log('👥 otherPlayers에 추가:', playerInfo.id.substring(0, 8));
-            console.log('현재 otherPlayers 갯수:', Object.keys(otherPlayers).length);
-            console.log('otherPlayers 목록:', Object.keys(otherPlayers).map(id => id.substring(0, 8)));
+            console.log('   전체 ID:', playerInfo.id);
+            console.log('   현재 otherPlayers 갯수:', Object.keys(otherPlayers).length);
+            console.log('   otherPlayers 키 목록:', Object.keys(otherPlayers));
           } catch (error) {
             console.error('❌ 플레이어 생성 실패:', error);
           }
@@ -314,6 +334,9 @@ export default function GamePage() {
           </p>
           <p className="text-xs text-gray-500 mt-2">
             F12 눌러서 콘솔 확인 - 상세 디버깅 로그 확인 가능
+          </p>
+          <p className="text-xs text-yellow-400 mt-1 font-semibold">
+            ⚠️ 게임 화면을 클릭한 후 키보드로 이동하세요!
           </p>
         </div>
         <div ref={gameRef} className="rounded overflow-hidden" />
