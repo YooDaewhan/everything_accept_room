@@ -26,20 +26,6 @@ export default function GamePage() {
         reconnectionAttempts: 5
       });
 
-      // 모든 소켓 이벤트 모니터링
-      const originalOn = socket.on.bind(socket);
-      const originalEmit = socket.emit.bind(socket);
-      
-      socket.on = function(event: string, handler: any) {
-        console.log(`🎧 이벤트 리스너 등록: ${event}`);
-        return originalOn(event, handler);
-      };
-      
-      socket.emit = function(event: string, ...args: any[]) {
-        console.log(`📡 이벤트 전송: ${event}`, args);
-        return originalEmit(event, ...args);
-      };
-
       // Phaser Game Config
       const config: Phaser.Types.Core.GameConfig = {
         type: Phaser.AUTO,
@@ -263,8 +249,6 @@ export default function GamePage() {
 
         const speed = 200;
         let moved = false;
-        const oldX = player.x;
-        const oldY = player.y;
         
         player.setVelocity(0);
 
@@ -293,12 +277,9 @@ export default function GamePage() {
           );
         }
 
-        // 실제로 위치가 변경되었을 때만 서버로 전송 (throttle 적용)
+        // 움직임이 있을 때 서버로 전송 (throttle 적용)
         const now = Date.now();
-        if (moved && 
-            (Math.abs(player.x - oldX) > 0.1 || Math.abs(player.y - oldY) > 0.1) &&
-            (now - lastEmitTime > EMIT_INTERVAL)) {
-          
+        if (moved && (now - lastEmitTime > EMIT_INTERVAL)) {
           const position = {
             x: Math.round(player.x),
             y: Math.round(player.y)
