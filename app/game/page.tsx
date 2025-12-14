@@ -26,6 +26,16 @@ export default function GamePage() {
         reconnectionAttempts: 5
       });
 
+      // 모든 수신 이벤트 모니터링
+      socket.onAny((eventName, ...args) => {
+        console.log(`🎧 [수신] 이벤트: ${eventName}`, args);
+      });
+
+      // 모든 발신 이벤트 모니터링
+      socket.onAnyOutgoing((eventName, ...args) => {
+        console.log(`📤 [발신] 이벤트: ${eventName}`, args);
+      });
+
       // Phaser Game Config
       const config: Phaser.Types.Core.GameConfig = {
         type: Phaser.AUTO,
@@ -285,7 +295,6 @@ export default function GamePage() {
             y: Math.round(player.y)
           };
           
-          console.log(`📤 playerMovement 전송: (${position.x}, ${position.y})`);
           socket.emit('playerMovement', position);
           lastEmitTime = now;
         }
